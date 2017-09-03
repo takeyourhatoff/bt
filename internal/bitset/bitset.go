@@ -7,6 +7,8 @@ import (
 	"math/bits"
 )
 
+const maxUint = 1<<bits.UintSize - 1
+
 type Bitset struct {
 	s []uint
 }
@@ -15,12 +17,22 @@ func (s *Bitset) Set(i int, v bool) {
 	if i < 0 {
 		panic("i < 0")
 	}
+	if v {
+		s.setTrue(i)
+	} else {
+		s.setFalse(i)
+	}
+}
+
+func (s *Bitset) setTrue(i int) {
 	for j := len(s.s); j <= i/bits.UintSize; j++ {
 		s.s = append(s.s, 0)
 	}
-	if v {
-		s.s[i/bits.UintSize] |= 1 << uint(i%bits.UintSize)
-	} else {
+	s.s[i/bits.UintSize] |= 1 << uint(i%bits.UintSize)
+}
+
+func (s *Bitset) setFalse(i int) {
+	if i/bits.UintSize < len(s.s) {
 		s.s[i/bits.UintSize] &^= 1 << uint(i%bits.UintSize)
 	}
 }
@@ -29,11 +41,11 @@ func (s *Bitset) Get(i int) bool {
 	if i < 0 {
 		panic("i < 0")
 	}
-	if i/bits.UintSize <= len(s.s) {
+	if i/bits.UintSize >= len(s.s) {
 		return false
 	}
 	mask := uint(1 << uint(i%bits.UintSize))
-	return s.s[i/bits.UintSize]&mask == 0
+	return s.s[i/bits.UintSize]&mask != 0
 }
 
 func (s *Bitset) And(ss *Bitset) *Bitset {
@@ -80,14 +92,13 @@ func (s *Bitset) NextSetBitAfter(i int) int {
 	if i < 0 {
 		panic("i < 0")
 	}
-	const maxUint = 1<<bits.UintSize - 1
+	mask := uint(maxUint) >> (bits.UintSize - uint(i)%bits.UintSize)
 	for j := i / bits.UintSize; j < len(s.s); j++ {
-		mask := uint(maxUint) >> (bits.UintSize - uint(i)%bits.UintSize)
-		masked := s.s[j] &^ mask
-		if masked == 0 {
-			continue
+		word := s.s[j] &^ mask
+		mask = 0
+		if word != 0 {
+			return j*bits.UintSize + bits.TrailingZeros(word)
 		}
-		return j*bits.UintSize + bits.TrailingZeros(masked)
 	}
 	return -1
 }
@@ -96,14 +107,13 @@ func (s *Bitset) NextUnsetBitAfter(i int) int {
 	if i < 0 {
 		panic("i < 0")
 	}
-	const maxUint = 1<<bits.UintSize - 1
+	mask := uint(maxUint) >> (bits.UintSize - uint(i)%bits.UintSize)
 	for j := i / bits.UintSize; j < len(s.s); j++ {
-		mask := uint(maxUint) >> (bits.UintSize - uint(i)%bits.UintSize)
-		masked := ^(s.s[j] &^ mask)
-		if masked == 0 {
-			continue
+		word := ^(s.s[j] &^ mask)
+		mask = 0
+		if word != 0 {
+			return j*bits.UintSize + bits.TrailingZeros(word)
 		}
-		return j*bits.UintSize + bits.TrailingZeros(masked)
 	}
 	return len(s.s) * bits.UintSize
 }
@@ -146,14 +156,17 @@ func (s *Bitset) Bytes() []byte {
 		}
 		b = b[r:]
 	}
-	for b0[len(b0)-1] == 0 {
+	for len(b0) > 0 && b0[len(b0)-1] == 0 {
 		b0 = b0[:len(b0)-1]
 	}
 	return b0
 }
 
-func (s *Bitset) FromBytes(data []byte) {
+func (s *Bitset) FromBytes(data []byte) *Bitset {
 	const r = bits.UintSize / 8
+	if len(data) == 0 {
+		s.s = nil
+	}
 	for len(data)%r != 0 {
 		data = append(data, 0)
 	}
@@ -170,7 +183,7 @@ func (s *Bitset) FromBytes(data []byte) {
 		s.s[i] = bits.Reverse(s.s[i])
 		data = data[r:]
 	}
-	return
+	return s
 }
 
 func min(i, j int) int {
