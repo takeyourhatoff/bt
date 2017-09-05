@@ -5,15 +5,40 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
+	"runtime"
 	"testing"
 	"testing/quick"
 )
 
-func TestSet(t *testing.T) {
+// NextAfter can be used to iterate over the elements of the set.
+func ExampleBitset_NextAfter() {
+	s := new(Bitset)
+	s.Add(2)
+	s.Add(42)
+	s.Add(13)
+	for i := s.NextAfter(0); i >= 0; i = s.NextAfter(i + 1) {
+		fmt.Println(i)
+	}
+	// Output:
+	// 2
+	// 13
+	// 42
+}
+
+func ExampleBitset_String() {
+	s := new(Bitset)
+	s.Add(2)
+	s.Add(42)
+	s.Add(13)
+	fmt.Println(s)
+	// Output: [2 13 42]
+}
+
+func TestAdd(t *testing.T) {
 	f := func(l ascendingInts) bool {
 		b := new(Bitset)
 		for _, i := range l {
-			b.Set(int(i), true)
+			b.Add(int(i))
 		}
 		for _, i := range l {
 			if v := b.Get(int(i)); v == false {
@@ -28,11 +53,54 @@ func TestSet(t *testing.T) {
 	}
 }
 
+func TestAdd_Panic(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Error("b.Add(-1) did not panic")
+		} else if err, ok := r.(runtime.Error); ok {
+			t.Error(err)
+		}
+	}()
+	new(Bitset).Add(-1)
+}
+
+func TestMax(t *testing.T) {
+	f := func(l ascendingInts) bool {
+		b := new(Bitset)
+		for _, i := range l {
+			b.Add(int(i))
+		}
+		if b.Get(1000) == false {
+			// if we are not expecting it, add and remove a very large value to test b.Max() ignores trailing zero words.
+			b.Add(1000)
+			b.Remove(1000)
+		}
+		max := b.Max()
+		if len(l) == 0 {
+			if max == -1 {
+				return true
+			} else {
+				t.Logf("b.Max() = %v, expected -1", max)
+				return false
+			}
+		}
+		if lMax := l[len(l)-1]; max != lMax {
+			t.Logf("b.Max() = %v, expected %v", max, lMax)
+			return false
+		}
+		return true
+	}
+	if err := quick.Check(f, nil); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestCount(t *testing.T) {
 	f := func(l ascendingInts) bool {
 		b := new(Bitset)
 		for _, i := range l {
-			b.Set(int(i), true)
+			b.Add(int(i))
 		}
 		if count := b.Count(); count != len(l) {
 			t.Logf("b.Count() = %d, expected %d", count, len(l))
@@ -45,17 +113,21 @@ func TestCount(t *testing.T) {
 	}
 }
 
-func TestNthSetBit(t *testing.T) {
+func TestNextAfter(t *testing.T) {
 	f := func(l ascendingInts) bool {
 		b := new(Bitset)
 		for _, i := range l {
-			b.Set(int(i), true)
+			b.Add(int(i))
 		}
-		for n, i := range l {
-			if nth := b.NthSetBit(n); nth != i {
-				t.Logf("b.NthSetBit(%d) = %d, expected %d", n, nth, i)
+		var n int
+		var oldi int
+		for i := b.NextAfter(0); i >= 0; i = b.NextAfter(i + 1) {
+			if l[n] != i {
+				t.Logf("b.NextAfter(%d) = %d, expected %d", oldi, i, l[n])
 				return false
 			}
+			oldi = i
+			n++
 		}
 		return true
 	}
@@ -87,7 +159,7 @@ func TestString(t *testing.T) {
 	f := func(l ascendingInts) bool {
 		b := new(Bitset)
 		for _, i := range l {
-			b.Set(int(i), true)
+			b.Add(int(i))
 		}
 		if s := b.String(); s != fmt.Sprintf("%v", l) {
 			t.Logf("b.String() = %v, wanted %v", s, l)
@@ -104,13 +176,14 @@ func TestAnd(t *testing.T) {
 	f := func(l0, l1 ascendingInts) bool {
 		b0 := new(Bitset)
 		for _, i := range l0 {
-			b0.Set(int(i), true)
+			b0.Add(int(i))
 		}
 		b1 := new(Bitset)
-		for _, i := range l0 {
-			b1.Set(int(i), true)
+		for _, i := range l1 {
+			b1.Add(int(i))
 		}
-		bx := b0.Copy().And(b1)
+		bx := b0.Copy()
+		bx.And(b1)
 		for i := 0; i < (len(b0.s)+len(b1.s))*64; i++ {
 			if b0.Get(i) && b1.Get(i) {
 				if bx.Get(i) == false {
@@ -133,21 +206,22 @@ func TestAndNot(t *testing.T) {
 	f := func(l0, l1 ascendingInts) bool {
 		b0 := new(Bitset)
 		for _, i := range l0 {
-			b0.Set(int(i), true)
+			b0.Add(int(i))
 		}
 		b1 := new(Bitset)
-		for _, i := range l0 {
-			b1.Set(int(i), true)
+		for _, i := range l1 {
+			b1.Add(int(i))
 		}
-		bx := b0.Copy().AndNot(b1)
+		bx := b0.Copy()
+		bx.AndNot(b1)
 		for i := 0; i < (len(b0.s)+len(b1.s))*64; i++ {
 			if b0.Get(i) && !b1.Get(i) {
 				if bx.Get(i) == false {
-					t.Logf("(b0.Get(%d) && b1.Get(%d)) = true, but bx.Get(%d) = false", i, i, i)
+					t.Logf("(b0.Get(%d) && !b1.Get(%d)) = true, but bx.Get(%d) = false", i, i, i)
 					return false
 				}
 			} else if bx.Get(i) == true {
-				t.Logf("(b0.Get(%d) && b1.Get(%d)) = false, but bx.Get(%d) = true", i, i, i)
+				t.Logf("(b0.Get(%d) && !b1.Get(%d)) = false, but bx.Get(%d) = true", i, i, i)
 				return false
 			}
 		}
@@ -161,7 +235,7 @@ func TestAndNot(t *testing.T) {
 type ascendingInts []int
 
 func (l ascendingInts) Generate(rand *rand.Rand, size int) reflect.Value {
-	l = make([]int, size)
+	l = make([]int, rand.Intn(size))
 	var x int
 	for i := range l {
 		x += rand.Intn(100) + 1
