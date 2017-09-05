@@ -24,21 +24,25 @@ type Metainfo struct {
 	Info         InfoDict  `bencode:"info"`
 }
 
-func (mi *Metainfo) Pieces() [][]byte {
-	pieces := make([][]byte, (len(mi.Info.Pieces)+19)/20)
-	for i := range pieces {
-		pieces[i] = mi.Info.Pieces[i*20 : (i+1)*20]
+type InfoDict struct {
+	Name        string `bencode:"name"`
+	Private     bool   `bencode:"private,ommitempty"`
+	PieceLength int64  `bencode:"piece length"`
+	RawPieces   []byte `bencode:"pieces"`
+	Length      int64  `bencode:"length,ommitempty"`
+	Files       []File `bencode:"files,ommitempty"`
+}
+
+func (i InfoDict) Pieces() [][]byte {
+	pieces := make([][]byte, (len(i.RawPieces)+19)/20)
+	for j := range pieces {
+		pieces[j] = i.RawPieces[j*20 : (j+1)*20]
 	}
 	return pieces
 }
 
-type InfoDict struct {
-	Name        string `bencode:"name"`
-	Private     bool   `bencode:"private,ommitempty"`
-	PieceLength int32  `bencode:"piece length"`
-	Pieces      []byte `bencode:"pieces"`
-	Length      int64  `bencode:"length,ommitempty"`
-	Files       []File `bencode:"files,ommitempty"`
+func (i InfoDict) NumPieces() int {
+	return len(i.RawPieces) / 20
 }
 
 func (i InfoDict) Infohash(h hash.Hash) []byte {
@@ -53,6 +57,16 @@ type File struct {
 	Path   []string `bencode:"path"`
 }
 
+type CompactTrackerResponse struct {
+	FailureReason string `bencode:"failure reason,ommitempty"`
+	Interval      int    `bencode:"interval,ommitempty"`
+	Peers         []byte `bencode:"peers,ommitempty"`
+}
+
+func (r CompactTrackerResponse) IntervalDuration() time.Duration {
+	return time.Duration(r.Interval) * time.Second
+}
+
 type TrackerResponse struct {
 	FailureReason string `bencode:"failure reason,ommitempty"`
 	Interval      int    `bencode:"interval,ommitempty"`
@@ -63,13 +77,21 @@ func (r TrackerResponse) IntervalDuration() time.Duration {
 	return time.Duration(r.Interval) * time.Second
 }
 
+func (r TrackerResponse) PeerAddrs() []string {
+	peers := make([]string, len(r.Peers))
+	for i, p := range r.Peers {
+		peers[i] = p.String()
+	}
+	return peers
+}
+
 type Peer struct {
 	PeerID []byte `bencode:"peer id"`
 	IP     string `bencode:"ip"`
 	Port   int    `bencode:"port"`
 }
 
-func (p Peer) Addr() string {
+func (p Peer) String() string {
 	return net.JoinHostPort(p.IP, strconv.Itoa(p.Port))
 }
 

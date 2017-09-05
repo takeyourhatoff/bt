@@ -37,7 +37,7 @@ func TestInfohash(t *testing.T) {
 	var m Metainfo
 	err = Decode(bytes.NewReader(b), &m)
 	if err != nil {
-		t.Fatal("%+v", err)
+		t.Fatalf("%+v", err)
 	}
 	var buf bytes.Buffer
 	Encode(&buf, m.Info)
