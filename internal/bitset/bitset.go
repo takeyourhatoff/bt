@@ -88,10 +88,10 @@ func (s *Bitset) NextAfter(i int) int {
 		// There can be no integers in s less than 0 by definition
 		i = 0
 	}
-	mask := uint(maxUint) >> (bits.UintSize - uint(i)%bits.UintSize)
+	mask := uint(maxUint) << (uint(i) % bits.UintSize)
 	for j := i / bits.UintSize; j < len(s.s); j++ {
-		word := s.s[j] &^ mask
-		mask = 0
+		word := s.s[j] & mask
+		mask = maxUint
 		if word != 0 {
 			return j*bits.UintSize + bits.TrailingZeros(word)
 		}
