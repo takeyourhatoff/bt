@@ -19,10 +19,11 @@ func (s *Bitset) Add(i int) {
 	if i < 0 {
 		panic("bitset: cannot add non-negative integer to set")
 	}
-	for j := len(s.s); j <= i/bits.UintSize; j++ {
+	w, mask := idx(i)
+	for j := len(s.s); j <= w; j++ {
 		s.s = append(s.s, 0)
 	}
-	s.s[i/bits.UintSize] |= 1 << uint(i%bits.UintSize)
+	s.s[w] |= mask
 }
 
 // Remove removes the integer i from s, or does nothing if i is not already in s.
@@ -31,18 +32,19 @@ func (s *Bitset) Remove(i int) {
 		// i < 0 cannot bit in set by definition.
 		return
 	}
-	if i/bits.UintSize < len(s.s) {
-		s.s[i/bits.UintSize] &^= 1 << uint(i%bits.UintSize)
+	w, mask := idx(i)
+	if w < len(s.s) {
+		s.s[w] &^= mask
 	}
 }
 
 // Get returns whether i is in s.
 func (s *Bitset) Get(i int) bool {
-	if i < 0 || i/bits.UintSize >= len(s.s) {
+	w, mask := idx(i)
+	if i < 0 || w >= len(s.s) {
 		return false
 	}
-	mask := uint(1 << uint(i%bits.UintSize))
-	return s.s[i/bits.UintSize]&mask != 0
+	return s.s[w]&mask != 0
 }
 
 // Max returns the value of the maximum integer in s, or -1 if s is empty.
@@ -172,6 +174,12 @@ func (s *Bitset) FromBytes(data []byte) *Bitset {
 		data = data[r:]
 	}
 	return s
+}
+
+func idx(i int) (w int, mask uint) {
+	w = i / bits.UintSize
+	mask = 1 << (uint(i) % bits.UintSize)
+	return
 }
 
 func min(i, j int) int {

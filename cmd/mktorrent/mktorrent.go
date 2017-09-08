@@ -105,7 +105,7 @@ func makeMetainfo(name string, i *bencode.Metainfo) error {
 	if err != nil {
 		return err
 	}
-	i.Info.Pieces = bytes.Join(p, nil)
+	i.Info.RawPieces = bytes.Join(p, nil)
 	return nil
 }
 

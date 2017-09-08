@@ -77,12 +77,16 @@ func (r TrackerResponse) IntervalDuration() time.Duration {
 	return time.Duration(r.Interval) * time.Second
 }
 
-func (r TrackerResponse) PeerAddrs() []string {
-	peers := make([]string, len(r.Peers))
+func (r TrackerResponse) PeerAddrs() ([]net.Addr, error) {
+	peers := make([]net.Addr, len(r.Peers))
 	for i, p := range r.Peers {
-		peers[i] = p.String()
+		var err error
+		peers[i], err = net.ResolveTCPAddr("tcp", p.String())
+		if err != nil {
+			return nil, err
+		}
 	}
-	return peers
+	return peers, nil
 }
 
 type Peer struct {
@@ -226,6 +230,8 @@ func encodeT(w *bufio.Writer, v reflect.Value) error {
 	return nil
 }
 
+const maxAlloc = 1 << 24
+
 func Decode(r io.Reader, v interface{}) error {
 	val := reflect.ValueOf(v)
 	if val.Kind() != reflect.Ptr {
@@ -312,6 +318,9 @@ func decodeString(r io.Reader, v reflect.Value) error {
 	if err != nil {
 		return errors.Wrap(err, "scanning string length")
 	}
+	if n < 0 || n > maxAlloc {
+		return errors.New("invalid string length")
+	}
 	buf := make([]byte, n)
 	_, err = io.ReadFull(r, buf)
 	if err != nil {
@@ -377,6 +386,9 @@ func decodeDict(r *bufio.Reader, v reflect.Value) error {
 		_, err = fmt.Fscanf(r, "%d:", &n)
 		if err != nil {
 			return errors.Wrap(err, "scanning dict key length prefix")
+		}
+		if n < 0 || n > maxAlloc {
+			return errors.New("invalid dict key length")
 		}
 		name := make([]byte, n)
 		_, err = io.ReadFull(r, name)

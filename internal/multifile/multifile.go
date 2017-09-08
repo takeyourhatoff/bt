@@ -3,7 +3,8 @@ package multifile
 import (
 	"io"
 	"os"
-	"path"
+	"path/filepath"
+	"sync"
 
 	"github.com/pkg/errors"
 
@@ -34,7 +35,7 @@ func Continue(dir string, i bencode.Metainfo) (File, error) {
 }
 
 func open(dir string, i bencode.Metainfo, flag int, perm os.FileMode) (File, error) {
-	name := path.Join(dir, path.Base(i.Info.Name))
+	name := filepath.Join(dir, filepath.Base(i.Info.Name))
 	if i.Info.Length > 0 {
 		f, err := os.OpenFile(name, flag, perm)
 		if err != nil {
@@ -51,11 +52,11 @@ func open(dir string, i bencode.Metainfo, flag int, perm os.FileMode) (File, err
 	mf := new(multiFile)
 	var offset int64
 	for _, fi := range i.Info.Files {
-		fullName := path.Join(fi.Path...)
-		fullName = path.Clean(fullName)
-		fullName = path.Join(name, fullName)
+		fullName := filepath.Join(fi.Path...)
+		fullName = filepath.Clean(fullName)
+		fullName = filepath.Join(name, fullName)
 		if flag&os.O_CREATE != 0 {
-			err := os.MkdirAll(path.Dir(fullName), 0775)
+			err := os.MkdirAll(filepath.Dir(fullName), 0775)
 			if err != nil {
 				return nil, errors.Wrap(err, "creating directory")
 			}
@@ -92,6 +93,7 @@ type file struct {
 
 type multiFile struct {
 	files []file
+	sync.Mutex
 }
 
 func (mf *multiFile) offset(off int64) (f file, offset int64, err error) {
